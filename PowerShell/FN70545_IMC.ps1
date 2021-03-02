@@ -21,19 +21,20 @@
     then collect every disk present and enabled in the system. It then gathers PID catalog information for each 
     disk device to compare with the list of affected PIDs defined in the folowing Cisco Field Notice:
     https://www.cisco.com/c/en/us/support/docs/field-notices/705/fn70545.html?emailclick=CNSemail
-.PARAMETER  imc
+.PARAMETER imc
     Specify the IPv4 address or FQDN of the UCS device you want to query.
+.PARAMETER csv
+    Provide a CSV file with comma separated list of CIMC IP/Hostnames
 .Example
-    ./FN70545_IMC.ps1 10.10.10.11,10.10.20.11,myucs.company.com
+    ./FN70545_IMC.ps1 -imc 10.10.10.11,10.10.20.11,myucs.company.com
+.Example
+    ./FN70545_IMC.ps1 -csv <Path to your CSV file> (eg... ./FN70545_IMC.ps1 -csv "C:\temp\RackMounts.csv")
 .NOTES
     Author - Brandon Sarradet, Technical Leader Cisco Customer Experience
     Email - bsarrade@cisco.com
 #>
 
-Param(
-    [Parameter(Mandatory=$True,Position=1)]
-    $imc = @()
-)
+Param($imc, $csv)
 
 import-module Cisco.IMC
 $PTversion = (Get-Module -Name Cisco.IMC).Version
@@ -55,15 +56,24 @@ $affectedDisks = @("UCS-SD400G12S4-EP","UCS-SD400G12S4-EP=","UCS-C3X60-12G240=",
 
 $cred = Get-Credential -Message "Cisco IMC"
 
-$RiskList = [System.Collections.ArrayList]@()
+if (!($null -eq $imc)){
+    $cimc = $imc.split(",")
+}
+elseif (!($null -eq $csv)){
+    $cimc = Get-Content -Path $csv
+}
+else {
+    Write-Error -Message "You didn't provide either a list of IPs or a CSV file!"
+}
 
-foreach ($ucs in $imc){
+$DiskArray = [System.Collections.ArrayList]@()
+
+foreach ($ucs in $cimc){
     $connect = Connect-Imc $ucs -Credential $cred
     Write-Verbose -Message "Collecting full disk inventory from $($connect.name)." -Verbose
     $DiskList = Get-ImcStorageLocalDisk
     $catalog = @{}
     Get-ImcPidCatalogHdd | %{$catalog[$_.Disk]=$_}
-    $DiskArray = [System.Collections.ArrayList]@()
     $p = 0
     Foreach ($disk in $disklist){
         $p++
